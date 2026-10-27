@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hitno gašenje BUTT-a</title>
+<style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #0b0b0b;
+        font-family: system-ui, sans-serif;
+        color: #eee;
+        padding: 20px;
+    }
+    #panel {
+        width: 100%;
+        max-width: 360px;
+        background: #141414;
+        border: 1px solid #262626;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+        overflow: hidden;
+    }
+    #panel header {
+        padding: 16px 18px;
+        background: #000;
+        border-bottom: 1px solid #262626;
+    }
+    #panel header b { font-size: 15px; letter-spacing: .3px; }
+    #status {
+        display: block;
+        margin-top: 4px;
+        font-size: 12px;
+        color: #888;
+    }
+    #status.online { color: #2ecc71; }
+    #status.offline { color: #e74c3c; }
+    #lista { padding: 14px; min-height: 60px; }
+    .red {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 10px;
+        margin-bottom: 8px;
+        border-radius: 8px;
+        background: #1e1e1e;
+    }
+    .red .ime { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+    .dot {
+        width: 9px; height: 9px;
+        border-radius: 50%;
+        background: #2ecc71;
+        flex-shrink: 0;
+    }
+    .dugme {
+        background: #e74c3c;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 7px 12px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .dugme:hover { background: #c0392b; }
+    .dugme:disabled { background: #555; cursor: not-allowed; }
+    .prazno { color: #666; font-size: 13px; text-align: center; padding: 10px 0; }
+    #log {
+        padding: 0 14px 14px;
+        font-size: 11px;
+        color: #777;
+        max-height: 120px;
+        overflow-y: auto;
+    }
+    #log div { padding: 2px 0; border-top: 1px solid #1f1f1f; }
+</style>
+</head>
+<body>
+
+<div id="panel">
+    <header>
+        <b>🎧 Hitno gašenje BUTT-a</b>
+        <span id="status">povezivanje...</span>
+    </header>
+    <div id="lista">
+        <div class="prazno">Učitavanje liste...</div>
+    </div>
+    <div id="log"></div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+    // Adresa glavnog Lizamaky servera - ISTI server na koji se javlja dj.exe i panel
+    const SERVER_URL = "https://lizamakyzauvek.onrender.com";
+
+    const elStatus = document.getElementById("status");
+    const elLista = document.getElementById("lista");
+    const elLog = document.getElementById("log");
+
+    function upisiLog(tekst) {
+        const red = document.createElement("div");
+        const vreme = new Date().toLocaleTimeString("sr-RS");
+        red.textContent = `[${vreme}] ${tekst}`;
+        elLog.prepend(red);
+    }
+
+    function escapeHtml(tekst) {
+        const div = document.createElement("div");
+        div.textContent = String(tekst);
+        return div.innerHTML;
+    }
+
+    const socket = io(SERVER_URL, {
+        reconnection: true
+    });
+
+    socket.on("connect", () => {
+        elStatus.textContent = "povezano";
+        elStatus.className = "online";
+        socket.emit("trayRequestLista");
+    });
+
+    socket.on("disconnect", () => {
+        elStatus.textContent = "veza prekinuta...";
+        elStatus.className = "offline";
+    });
+
+    socket.on("connect_error", () => {
+        elStatus.textContent = "greška u konekciji";
+        elStatus.className = "offline";
+    });
+
+    socket.on("trayLista", (imena) => {
+        if (!imena || imena.length === 0) {
+            elLista.innerHTML = `<div class="prazno">Trenutno niko nije povezan.</div>`;
+            return;
+        }
+        elLista.innerHTML = imena.map(ime => `
+            <div class="red">
+                <span class="ime"><span class="dot"></span>${escapeHtml(ime)}</span>
+                <button class="dugme" data-ime="${escapeHtml(ime)}">Ugasi BUTT</button>
+            </div>
+        `).join("");
+
+        elLista.querySelectorAll(".dugme").forEach(dugme => {
+            dugme.addEventListener("click", () => {
+                const ime = dugme.getAttribute("data-ime");
+                if (!confirm(`Ugasiti BUTT kod: ${ime}?`)) return;
+
+                dugme.disabled = true;
+                dugme.textContent = "Gašenje...";
+                socket.emit("trayUgasiBut", { ime });
+                upisiLog(`Poslata komanda gašenja za: ${ime}`);
+
+                setTimeout(() => {
+                    dugme.disabled = false;
+                    dugme.textContent = "Ugasi BUTT";
+                }, 3000);
+            });
+        });
+    });
+</script>
+
+</body>
+</html>
